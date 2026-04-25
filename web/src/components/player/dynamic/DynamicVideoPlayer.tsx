@@ -271,7 +271,7 @@ export default function DynamicVideoPlayer({
     }
 
     setSource({
-      playlist: `${apiHost}vod/${camera}/start/${recordingParams.after}/end/${recordingParams.before}/master.m3u8`,
+      playlist: `${apiHost}vod/${camera}/start/${recordingParams.after}/end/${recordingParams.before}/master.m3u8?force_discontinuity=true`,
       startPosition,
     });
 
@@ -360,6 +360,8 @@ export default function DynamicVideoPlayer({
               clearTimeout(loadingTimeout);
             }
 
+            setIsLoading(false);
+            setIsBuffering(false);
             setNoRecording(false);
           }}
           setFullResolution={setFullResolution}

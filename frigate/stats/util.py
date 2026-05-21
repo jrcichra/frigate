@@ -159,6 +159,7 @@ def get_detector_stats(
             # issue https://github.com/python/typeshed/issues/8799
             # from mypy 0.981 onwards
             "pid": pid,
+            "failed": bool(detector.detector_failed.value),  # type: ignore[attr-defined]
         }
 
         temp = get_detector_temperature(detector_type, {detector_type: current_index})

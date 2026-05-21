@@ -47,6 +47,7 @@ export type DetectorStats = {
   temperature?: number;
   cpu?: string;
   mem?: string;
+  failed?: boolean;
 };
 
 export type EmbeddingsStats = {

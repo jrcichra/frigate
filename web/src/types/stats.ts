@@ -37,6 +37,7 @@ export type DetectorStats = {
   detection_start: number;
   inference_speed: number;
   pid: number;
+  failed?: boolean;
 };
 
 export type EmbeddingsStats = {

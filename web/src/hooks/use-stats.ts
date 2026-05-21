@@ -45,8 +45,18 @@ export default function useStats(stats: FrigateStats | undefined) {
       });
     }
 
-    // check detectors for high inference speeds
+    // check detectors for failures or high inference speeds
     Object.entries(memoizedStats["detectors"]).forEach(([key, det]) => {
+      if (det["failed"]) {
+        problems.push({
+          text: t("stats.detectorFailed", {
+            detect: capitalizeFirstLetter(key),
+          }),
+          color: "text-danger",
+          relevantLink: "logs",
+        });
+        return;
+      }
       if (det["inference_speed"] > InferenceThreshold.error) {
         problems.push({
           text: t("stats.detectIsVerySlow", {

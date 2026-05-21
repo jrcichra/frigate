@@ -176,6 +176,7 @@
     "cameraIsOffline": "{{camera}} is offline",
     "detectIsSlow": "{{detect}} is slow ({{speed}} ms)",
     "detectIsVerySlow": "{{detect}} is very slow ({{speed}} ms)",
+    "detectorFailed": "{{detect}} detector failed to initialize — recording continues without object detection",
     "shmTooLow": "/dev/shm allocation ({{total}} MB) should be increased to at least {{min}} MB."
   },
   "enrichments": {

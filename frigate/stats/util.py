@@ -302,6 +302,7 @@ def stats_snapshot(
             # issue https://github.com/python/typeshed/issues/8799
             # from mypy 0.981 onwards
             "pid": pid,
+            "failed": bool(detector.detector_failed.value),  # type: ignore[attr-defined]
         }
     stats["camera_fps"] = round(total_camera_fps, 2)
     stats["process_fps"] = round(total_process_fps, 2)

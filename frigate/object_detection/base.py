@@ -121,6 +121,7 @@ class DetectorRunner(FrigateProcess):
         config: FrigateConfig,
         detector_config: BaseDetectorConfig,
         stop_event: MpEvent,
+        detector_failed: Value,
     ) -> None:
         super().__init__(stop_event, PROCESS_PRIORITY_HIGH, name=name, daemon=True)
         self.detection_queue = detection_queue
@@ -129,6 +130,7 @@ class DetectorRunner(FrigateProcess):
         self.start_time = start_time
         self.config = config
         self.detector_config = detector_config
+        self.detector_failed = detector_failed
         self.outputs: dict = {}
 
     def create_output_shm(self, name: str):
@@ -140,8 +142,16 @@ class DetectorRunner(FrigateProcess):
         self.pre_run_setup(self.config.logger)
 
         frame_manager = SharedMemoryFrameManager()
-        object_detector = LocalObjectDetector(detector_config=self.detector_config)
         detector_publisher = ObjectDetectorPublisher()
+
+        try:
+            object_detector = LocalObjectDetector(detector_config=self.detector_config)
+        except Exception as e:
+            logger.error(
+                f"Failed to initialize detector — recording will continue without object detection: {e}"
+            )
+            self.detector_failed.value = True
+            object_detector = None
 
         for name in self.cameras:
             self.create_output_shm(name)
@@ -167,8 +177,21 @@ class DetectorRunner(FrigateProcess):
 
             # detect and send the output
             self.start_time.value = datetime.datetime.now().timestamp()
-            detections = object_detector.detect_raw(input_frame)
-            duration = datetime.datetime.now().timestamp() - self.start_time.value
+            if object_detector is None:
+                detections = np.zeros((20, 6), dtype=np.float32)
+                duration = 0.0
+            else:
+                try:
+                    detections = object_detector.detect_raw(input_frame)
+                    duration = datetime.datetime.now().timestamp() - self.start_time.value
+                except Exception as e:
+                    logger.error(
+                        f"Detector error, disabling detection — recording will continue without object detection: {e}"
+                    )
+                    self.detector_failed.value = True
+                    object_detector = None
+                    detections = np.zeros((20, 6), dtype=np.float32)
+                    duration = 0.0
             frame_manager.close(connection_id)
 
             if connection_id not in self.outputs:
@@ -195,6 +218,7 @@ class AsyncDetectorRunner(FrigateProcess):
         config: FrigateConfig,
         detector_config: BaseDetectorConfig,
         stop_event: MpEvent,
+        detector_failed: Value,
     ) -> None:
         super().__init__(stop_event, PROCESS_PRIORITY_HIGH, name=name, daemon=True)
         self.detection_queue = detection_queue
@@ -203,6 +227,7 @@ class AsyncDetectorRunner(FrigateProcess):
         self.start_time = start_time
         self.config = config
         self.detector_config = detector_config
+        self.detector_failed = detector_failed
         self.outputs: dict = {}
         self._frame_manager: SharedMemoryFrameManager | None = None
         self._publisher: ObjectDetectorPublisher | None = None
@@ -220,6 +245,17 @@ class AsyncDetectorRunner(FrigateProcess):
             try:
                 connection_id = self.detection_queue.get(timeout=1)
             except queue.Empty:
+                continue
+
+            if self._detector is None:
+                # detector failed; drain queue and publish empty results
+                self._frame_manager.close(connection_id)
+                if connection_id not in self.outputs:
+                    self.create_output_shm(connection_id)
+                self.outputs[connection_id]["np"][:] = np.zeros(
+                    (20, 6), dtype=np.float32
+                )
+                self._publisher.publish(connection_id)
                 continue
 
             input_frame = self._frame_manager.get(
@@ -243,6 +279,9 @@ class AsyncDetectorRunner(FrigateProcess):
     def _result_worker(self) -> None:
         logger.info("Starting Result Worker Thread")
         while not self.stop_event.is_set():
+            if self._detector is None:
+                time.sleep(0.1)
+                continue
             connection_id, detections = self._detector.async_receive_output()
 
             # Handle timeout case (queue.Empty) - just continue
@@ -275,9 +314,16 @@ class AsyncDetectorRunner(FrigateProcess):
 
         self._frame_manager = SharedMemoryFrameManager()
         self._publisher = ObjectDetectorPublisher()
-        self._detector = AsyncLocalObjectDetector(
-            detector_config=self.detector_config, stop_event=self.stop_event
-        )
+        try:
+            self._detector = AsyncLocalObjectDetector(
+                detector_config=self.detector_config, stop_event=self.stop_event
+            )
+        except Exception as e:
+            logger.error(
+                f"Failed to initialize async detector — recording will continue without object detection: {e}"
+            )
+            self.detector_failed.value = True
+            self._detector = None
 
         for name in self.cameras:
             self.create_output_shm(name)
@@ -300,7 +346,8 @@ class AsyncDetectorRunner(FrigateProcess):
             t_result.join(timeout=5)
 
             # Shutdown the AsyncDetector
-            self._detector.detect_api.shutdown()
+            if self._detector is not None:
+                self._detector.detect_api.shutdown()
 
             self._publisher.stop()
         except Exception as e:
@@ -324,6 +371,7 @@ class ObjectDetectProcess:
         self.detection_queue = detection_queue
         self.avg_inference_speed = Value("d", 0.01)
         self.detection_start = Value("d", 0.0)
+        self.detector_failed = Value("b", False)
         self.detect_process: FrigateProcess | None = None
         self.config = config
         self.detector_config = detector_config
@@ -359,6 +407,7 @@ class ObjectDetectProcess:
                 self.config,
                 self.detector_config,
                 self.stop_event,
+                self.detector_failed,
             )
         else:
             self.detect_process = DetectorRunner(
@@ -370,6 +419,7 @@ class ObjectDetectProcess:
                 self.config,
                 self.detector_config,
                 self.stop_event,
+                self.detector_failed,
             )
         self.detect_process.start()
 

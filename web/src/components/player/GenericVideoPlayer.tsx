@@ -12,12 +12,16 @@ import useKeyboardListener from "@/hooks/use-keyboard-listener";
 
 type GenericVideoPlayerProps = {
   source: string;
+  frigateControls?: boolean;
+  timelineControls?: boolean;
   onPlaying?: () => void;
   children?: React.ReactNode;
 };
 
 export function GenericVideoPlayer({
   source,
+  frigateControls = false,
+  timelineControls = false,
   onPlaying,
   children,
 }: GenericVideoPlayerProps) {
@@ -47,17 +51,19 @@ export function GenericVideoPlayer({
     (diff: number) => {
       const currentTime = videoRef.current?.currentTime;
 
-      if (!currentTime) {
+      if (!videoRef.current || currentTime == null) {
         return;
       }
 
-      videoRef.current!.currentTime = Math.max(0, currentTime + diff);
+      videoRef.current.currentTime = Math.max(0, currentTime + diff);
     },
     [videoRef],
   );
 
   useKeyboardListener(
-    ["ArrowDown", "ArrowLeft", "ArrowRight", "ArrowUp", " ", "f", "m"],
+    frigateControls
+      ? []
+      : ["ArrowDown", "ArrowLeft", "ArrowRight", "ArrowUp", " ", "f", "m"],
     (key, modifiers) => {
       if (!modifiers.down || modifiers.repeat) {
         return true;
@@ -122,9 +128,10 @@ export function GenericVideoPlayer({
               <HlsVideoPlayer
                 videoRef={videoRef}
                 currentSource={hlsSource}
-                hotKeys
+                hotKeys={frigateControls}
                 visible
-                frigateControls={false}
+                frigateControls={frigateControls}
+                timelineControls={timelineControls}
                 fullscreen={false}
                 supportsFullscreen={false}
                 onPlaying={() => {

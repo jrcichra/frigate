@@ -1392,7 +1392,11 @@ export function ExportPreviewDialog({
             {t("export.fromTimeline.previewExport")}
           </DialogDescription>
         </DialogHeader>
-        <GenericVideoPlayer source={source} />
+        <GenericVideoPlayer
+          source={source}
+          frigateControls
+          timelineControls
+        />
       </DialogContent>
     </Dialog>
   );

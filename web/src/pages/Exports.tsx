@@ -6,6 +6,7 @@ import {
   ExportCard,
 } from "@/components/card/ExportCard";
 import ActivityIndicator from "@/components/indicators/activity-indicator";
+import ExportVideoPlayer from "@/components/player/ExportVideoPlayer";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -282,7 +283,7 @@ function Exports() {
   const [selectedCaseId, setSelectedCaseId] = useState<string | undefined>(
     undefined,
   );
-  const [selectedAspect, setSelectedAspect] = useState(0.0);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
 
   // Handle browser back button to deselect case before navigating away
   useHistoryBack({
@@ -683,27 +684,13 @@ function Exports() {
           <DialogTitle className="smart-capitalize">
             {selected?.name?.replaceAll("_", " ")}
           </DialogTitle>
-          <video
-            className={cn(
-              "size-full rounded-lg md:rounded-2xl",
-              selectedAspect < 1.5 && "aspect-video h-full",
-            )}
-            playsInline
-            preload="auto"
-            autoPlay
-            controls
-            muted
-            onLoadedData={(e) =>
-              setSelectedAspect(
-                e.currentTarget.videoWidth / e.currentTarget.videoHeight,
-              )
-            }
-          >
-            <source
-              src={`${baseUrl}${selected?.video_path?.replace("/media/frigate/", "")}`}
-              type="video/mp4"
+          <div className="relative aspect-video w-full">
+            <ExportVideoPlayer
+              videoRef={videoRef}
+              source={`${baseUrl}${selected?.video_path?.replace("/media/frigate/", "")}`}
+              downloadName={`${selected?.name ?? "export"}.mp4`}
             />
-          </video>
+          </div>
         </DialogContent>
       </Dialog>
 

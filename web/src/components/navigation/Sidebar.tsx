@@ -7,9 +7,19 @@ import AccountSettings from "../menu/AccountSettings";
 import useNavigation from "@/hooks/use-navigation";
 import { baseUrl } from "@/api/baseUrl";
 import { useMemo } from "react";
+import { useBrightness } from "@/context/image-brightness-provider";
+import * as SliderPrimitive from "@radix-ui/react-slider";
+import { LuSun } from "react-icons/lu";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { TooltipPortal } from "@radix-ui/react-tooltip";
 
 function Sidebar() {
   const basePath = useMemo(() => new URL(baseUrl).pathname, []);
+  const { brightness, setBrightness } = useBrightness();
 
   const isRootMatch = useMatch("/");
   const isBasePathMatch = useMatch(basePath);
@@ -40,6 +50,32 @@ function Sidebar() {
         })}
       </div>
       <div className="mb-8 flex flex-col items-center gap-4">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div className="flex flex-col items-center gap-1">
+              <LuSun className="size-3 text-muted-foreground" />
+              <SliderPrimitive.Root
+                orientation="vertical"
+                min={30}
+                max={1000}
+                step={10}
+                value={[brightness]}
+                onValueChange={(v) => setBrightness(v[0])}
+                className="relative flex h-20 touch-none select-none flex-col items-center"
+              >
+                <SliderPrimitive.Track className="relative w-2 grow overflow-hidden rounded-full bg-secondary">
+                  <SliderPrimitive.Range className="absolute w-full bg-primary" />
+                </SliderPrimitive.Track>
+                <SliderPrimitive.Thumb className="block h-4 w-4 cursor-pointer rounded-full border-2 border-primary bg-background ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" />
+              </SliderPrimitive.Root>
+            </div>
+          </TooltipTrigger>
+          <TooltipPortal>
+            <TooltipContent side="right">
+              <p>Brightness: {brightness}%</p>
+            </TooltipContent>
+          </TooltipPortal>
+        </Tooltip>
         <GeneralSettings />
         <AccountSettings />
       </div>

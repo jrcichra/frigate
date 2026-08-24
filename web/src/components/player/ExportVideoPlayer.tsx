@@ -155,7 +155,7 @@ export default function ExportVideoPlayer({
               href={source}
               download={downloadName ?? true}
               aria-label="Download export"
-              className="ml-1 cursor-pointer text-white hover:text-primary"
+              className="ml-1 flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/70 hover:text-primary"
               onClick={(e) => e.stopPropagation()}
             >
               <LuDownload className="size-4" />

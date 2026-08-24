@@ -31,6 +31,9 @@ import { baseUrl } from "@/api/baseUrl";
 import { cn } from "@/lib/utils";
 import { GenericVideoPlayer } from "../player/GenericVideoPlayer";
 import { useTranslation } from "react-i18next";
+import { useBrightness } from "@/context/image-brightness-provider";
+import { Slider } from "../ui/slider";
+import { LuSun } from "react-icons/lu";
 
 const EXPORT_OPTIONS = [
   "1",
@@ -597,6 +600,7 @@ export function ExportPreviewDialog({
   setShowPreview,
 }: ExportPreviewDialogProps) {
   const { t } = useTranslation(["components/dialog"]);
+  const { brightness, setBrightness } = useBrightness();
   if (!range) {
     return null;
   }
@@ -613,11 +617,40 @@ export function ExportPreviewDialog({
           isMobile && "px-4",
         )}
       >
-        <DialogHeader>
-          <DialogTitle>{t("export.fromTimeline.previewExport")}</DialogTitle>
-          <DialogDescription className="sr-only">
-            {t("export.fromTimeline.previewExport")}
-          </DialogDescription>
+        <DialogHeader className="flex-row items-center justify-between gap-2 space-y-0 pr-8">
+          <div>
+            <DialogTitle>
+              {t("export.fromTimeline.previewExport")}
+            </DialogTitle>
+            <DialogDescription className="sr-only">
+              {t("export.fromTimeline.previewExport")}
+            </DialogDescription>
+          </div>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                className="shrink-0"
+                aria-label="Brightness"
+                size="sm"
+                variant="secondary"
+              >
+                <LuSun className="size-4" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="flex w-64 items-center gap-2">
+              <LuSun className="size-4 shrink-0 text-muted-foreground" />
+              <Slider
+                min={30}
+                max={1000}
+                step={10}
+                value={[brightness]}
+                onValueChange={(v) => setBrightness(v[0])}
+              />
+              <span className="w-12 shrink-0 text-right text-xs text-muted-foreground">
+                {brightness}%
+              </span>
+            </PopoverContent>
+          </Popover>
         </DialogHeader>
         <GenericVideoPlayer
           source={source}

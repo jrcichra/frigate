@@ -8,6 +8,7 @@ import { StatusBarMessagesProvider } from "@/context/statusbar-provider";
 import { LanguageProvider } from "./language-provider";
 import { StreamingSettingsProvider } from "./streaming-settings-provider";
 import { AuthProvider } from "./auth-context";
+import { BrightnessProvider } from "./image-brightness-provider";
 
 type TProvidersProps = {
   children: ReactNode;
@@ -24,7 +25,9 @@ function providers({ children }: TProvidersProps) {
                 <IconContext.Provider value={{ size: "20" }}>
                   <StatusBarMessagesProvider>
                     <StreamingSettingsProvider>
-                      {children}
+                      <BrightnessProvider>
+                        {children}
+                      </BrightnessProvider>
                     </StreamingSettingsProvider>
                   </StatusBarMessagesProvider>
                 </IconContext.Provider>

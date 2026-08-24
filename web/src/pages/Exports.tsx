@@ -21,14 +21,22 @@ import {
   Dialog,
   DialogContent,
   DialogFooter,
+  DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 import Heading from "@/components/ui/heading";
 import { Input } from "@/components/ui/input";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Slider } from "@/components/ui/slider";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Toaster } from "@/components/ui/sonner";
+import { useBrightness } from "@/context/image-brightness-provider";
 import useKeyboardListener from "@/hooks/use-keyboard-listener";
 import { useSearchEffect } from "@/hooks/use-overlay-state";
 import { useHistoryBack } from "@/hooks/use-history-back";
@@ -64,6 +72,7 @@ import {
   LuFolderX,
   LuPencil,
   LuPlus,
+  LuSun,
   LuTrash2,
 } from "react-icons/lu";
 import { toast } from "sonner";
@@ -78,6 +87,7 @@ const EXPORT_FILTER_ARRAY_KEYS = ["cameras"];
 function Exports() {
   const { t } = useTranslation(["views/exports"]);
   const isAdmin = useIsAdmin();
+  const { brightness, setBrightness } = useBrightness();
 
   useEffect(() => {
     document.title = t("documentTitle");
@@ -681,9 +691,41 @@ function Exports() {
             isMobile && "landscape:max-w-[60%]",
           )}
         >
-          <DialogTitle className="smart-capitalize">
-            {selected?.name?.replaceAll("_", " ")}
-          </DialogTitle>
+          <DialogHeader className="flex-row items-center justify-between gap-2 space-y-0 pr-8">
+            <DialogTitle className="smart-capitalize">
+              {selected?.name?.replaceAll("_", " ")}
+            </DialogTitle>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  className="shrink-0"
+                  aria-label="Brightness"
+                  size="sm"
+                  variant="secondary"
+                >
+                  <LuSun className="size-4" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent
+                className="flex w-64 items-center gap-2"
+                onPointerDown={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
+                onTouchStart={(e) => e.stopPropagation()}
+              >
+                <LuSun className="size-4 shrink-0 text-muted-foreground" />
+                <Slider
+                  min={30}
+                  max={1000}
+                  step={10}
+                  value={[brightness]}
+                  onValueChange={(v) => setBrightness(v[0])}
+                />
+                <span className="w-12 shrink-0 text-right text-xs text-muted-foreground">
+                  {brightness}%
+                </span>
+              </PopoverContent>
+            </Popover>
+          </DialogHeader>
           <div className="relative aspect-video w-full">
             <ExportVideoPlayer
               videoRef={videoRef}

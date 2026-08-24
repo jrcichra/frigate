@@ -189,3 +189,10 @@ html {
 .react-lazylog-searchbar {
   background-color: transparent !important;
 }
+
+/* Global brightness adjustment for all media */
+img,
+video,
+canvas {
+  filter: brightness(var(--image-brightness, 100%));
+}

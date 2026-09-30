@@ -1,13 +1,7 @@
-import { useMemo, useState } from "react";
-import { Button } from "../ui/button";
-import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
-import { SelectSeparator } from "../ui/select";
+import { useMemo } from "react";
 import { TimeRange } from "@/types/timeline";
-import { useFormattedTimestamp, use24HourTime } from "@/hooks/use-date-utils";
-import { getUTCOffset } from "@/utils/dateUtil";
-import { TimezoneAwareCalendar } from "./ReviewActivityCalendar";
-import { FaArrowRight, FaCalendarAlt } from "react-icons/fa";
-import { isDesktop, isIOS } from "react-device-detect";
+import { useDateLocale } from "@/hooks/use-date-locale";
+import { formatSecondsToDuration, getUTCOffset } from "@/utils/dateUtil";
 import useSWR from "swr";
 import { FrigateConfig } from "@/types/frigateConfig";
 import { useTranslation } from "react-i18next";
@@ -20,6 +14,14 @@ type CustomTimeSelectorProps = {
   endLabel: string;
 };
 
+const pad = (value: number) => value.toString().padStart(2, "0");
+
+// format for <input type="datetime-local">, read from the local clock
+function toInputValue(timestamp: number) {
+  const date = new Date(timestamp * 1000);
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+}
+
 export function CustomTimeSelector({
   latestTime,
   range,
@@ -27,217 +29,87 @@ export function CustomTimeSelector({
   startLabel,
   endLabel,
 }: CustomTimeSelectorProps) {
-  const { t } = useTranslation(["common"]);
+  const { t } = useTranslation(["common", "components/dialog"]);
+  const locale = useDateLocale();
   const { data: config } = useSWR<FrigateConfig>("config");
 
-  // times
-  const timezoneOffset = useMemo(
-    () =>
-      config?.ui.timezone
-        ? Math.round(getUTCOffset(new Date(), config.ui.timezone))
-        : undefined,
-    [config?.ui.timezone],
-  );
-  const localTimeOffset = useMemo(
-    () =>
-      Math.round(
-        getUTCOffset(
-          new Date(),
-          Intl.DateTimeFormat().resolvedOptions().timeZone,
-        ),
+  // the inputs edit a clock in the configured UI timezone, but the range
+  // always holds real unix timestamps
+  const offsetDeltaSeconds = useMemo(() => {
+    if (!config?.ui.timezone) {
+      return 0;
+    }
+
+    const timezoneOffset = Math.round(
+      getUTCOffset(new Date(), config.ui.timezone),
+    );
+    const localTimeOffset = Math.round(
+      getUTCOffset(
+        new Date(),
+        Intl.DateTimeFormat().resolvedOptions().timeZone,
       ),
-    [],
-  );
+    );
 
-  const offsetDeltaSeconds =
-    timezoneOffset === undefined ? 0 : (timezoneOffset - localTimeOffset) * 60;
+    return (timezoneOffset - localTimeOffset) * 60;
+  }, [config?.ui.timezone]);
 
-  // real unix timestamps; the display values below are shifted so the local
-  // clock reads the configured timezone
   const realStart = range?.after || latestTime - 3600;
   const realEnd = range?.before || latestTime;
-  const startTime = realStart + offsetDeltaSeconds;
-  const endTime = realEnd + offsetDeltaSeconds;
+  const isInvalid = realEnd <= realStart;
 
-  const is24Hour = use24HourTime(config);
+  const onChange = (edge: "after" | "before", value: string) => {
+    // cleared or partially typed inputs report an empty value
+    if (!value) {
+      return;
+    }
 
-  const formattedStart = useFormattedTimestamp(
-    startTime,
-    is24Hour
-      ? t("time.formattedTimestamp.24hour")
-      : t("time.formattedTimestamp.12hour"),
-  );
+    const timestamp = new Date(value).getTime() / 1000 - offsetDeltaSeconds;
 
-  const formattedEnd = useFormattedTimestamp(
-    endTime,
-    is24Hour
-      ? t("time.formattedTimestamp.24hour")
-      : t("time.formattedTimestamp.12hour"),
-  );
+    if (Number.isNaN(timestamp)) {
+      return;
+    }
 
-  const startClock = useMemo(() => {
-    const date = new Date(startTime * 1000);
-    return `${date.getHours().toString().padStart(2, "0")}:${date.getMinutes().toString().padStart(2, "0")}:${date.getSeconds().toString().padStart(2, "0")}`;
-  }, [startTime]);
+    setRange({
+      after: edge === "after" ? timestamp : realStart,
+      before: edge === "before" ? timestamp : realEnd,
+    });
+  };
 
-  const endClock = useMemo(() => {
-    const date = new Date(endTime * 1000);
-    return `${date.getHours().toString().padStart(2, "0")}:${date.getMinutes().toString().padStart(2, "0")}:${date.getSeconds().toString().padStart(2, "0")}`;
-  }, [endTime]);
-
-  // calendars
-  const [startOpen, setStartOpen] = useState(false);
-  const [endOpen, setEndOpen] = useState(false);
+  const inputClass =
+    "w-full rounded-md border border-input bg-background p-2 text-secondary-foreground dark:[color-scheme:dark]";
 
   return (
-    <div
-      className={`mt-3 flex items-center rounded-lg bg-secondary text-secondary-foreground ${isDesktop ? "mx-8 gap-2 px-2" : "pl-2"}`}
-    >
-      <FaCalendarAlt />
-      <div className="flex flex-wrap items-center">
-        <Popover
-          open={startOpen}
-          onOpenChange={(open) => {
-            if (!open) {
-              setStartOpen(false);
-            }
-          }}
-        >
-          <PopoverTrigger asChild>
-            <Button
-              className={`text-primary ${isDesktop ? "" : "text-xs"}`}
-              aria-label={startLabel}
-              variant={startOpen ? "select" : "default"}
-              size="sm"
-              onClick={() => {
-                setStartOpen(true);
-                setEndOpen(false);
-              }}
-            >
-              {formattedStart}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="flex flex-col items-center">
-            <TimezoneAwareCalendar
-              timezone={config?.ui.timezone}
-              selectedDay={new Date(startTime * 1000)}
-              onSelect={(day) => {
-                if (!day) {
-                  return;
-                }
-
-                const next = new Date(startTime * 1000);
-                next.setFullYear(
-                  day.getFullYear(),
-                  day.getMonth(),
-                  day.getDate(),
-                );
-                setRange({
-                  before: realEnd,
-                  after: next.getTime() / 1000 - offsetDeltaSeconds,
-                });
-              }}
-            />
-            <SelectSeparator className="bg-secondary" />
-            <input
-              className="mx-4 w-full border border-input bg-background p-1 text-secondary-foreground hover:bg-accent hover:text-accent-foreground dark:[color-scheme:dark]"
-              id="startTime"
-              type="time"
-              value={startClock}
-              step={isIOS ? "60" : "1"}
-              onChange={(e) => {
-                const clock = e.target.value;
-                const [hour, minute, second] = isIOS
-                  ? [...clock.split(":"), "00"]
-                  : clock.split(":");
-
-                const start = new Date(startTime * 1000);
-                start.setHours(
-                  parseInt(hour),
-                  parseInt(minute),
-                  parseInt(second ?? 0),
-                  0,
-                );
-                setRange({
-                  before: realEnd,
-                  after: start.getTime() / 1000 - offsetDeltaSeconds,
-                });
-              }}
-            />
-          </PopoverContent>
-        </Popover>
-        <FaArrowRight className="size-4 text-primary" />
-        <Popover
-          open={endOpen}
-          onOpenChange={(open) => {
-            if (!open) {
-              setEndOpen(false);
-            }
-          }}
-        >
-          <PopoverTrigger asChild>
-            <Button
-              className={`text-primary ${isDesktop ? "" : "text-xs"}`}
-              aria-label={endLabel}
-              variant={endOpen ? "select" : "default"}
-              size="sm"
-              onClick={() => {
-                setEndOpen(true);
-                setStartOpen(false);
-              }}
-            >
-              {formattedEnd}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="flex flex-col items-center">
-            <TimezoneAwareCalendar
-              timezone={config?.ui.timezone}
-              selectedDay={new Date(endTime * 1000)}
-              onSelect={(day) => {
-                if (!day) {
-                  return;
-                }
-
-                const next = new Date(endTime * 1000);
-                next.setFullYear(
-                  day.getFullYear(),
-                  day.getMonth(),
-                  day.getDate(),
-                );
-                setRange({
-                  after: realStart,
-                  before: next.getTime() / 1000 - offsetDeltaSeconds,
-                });
-              }}
-            />
-            <SelectSeparator className="bg-secondary" />
-            <input
-              className="mx-4 w-full border border-input bg-background p-1 text-secondary-foreground hover:bg-accent hover:text-accent-foreground dark:[color-scheme:dark]"
-              id="endTime"
-              type="time"
-              value={endClock}
-              step={isIOS ? "60" : "1"}
-              onChange={(e) => {
-                const clock = e.target.value;
-                const [hour, minute, second] = isIOS
-                  ? [...clock.split(":"), "00"]
-                  : clock.split(":");
-
-                const end = new Date(endTime * 1000);
-                end.setHours(
-                  parseInt(hour),
-                  parseInt(minute),
-                  parseInt(second ?? 0),
-                  0,
-                );
-                setRange({
-                  before: end.getTime() / 1000 - offsetDeltaSeconds,
-                  after: realStart,
-                });
-              }}
-            />
-          </PopoverContent>
-        </Popover>
+    <div className="mt-3 flex flex-col gap-2 rounded-lg bg-secondary p-3 text-secondary-foreground">
+      <label className="flex flex-col gap-1 text-sm">
+        {startLabel}
+        <input
+          className={inputClass}
+          type="datetime-local"
+          step="1"
+          aria-label={startLabel}
+          value={toInputValue(realStart + offsetDeltaSeconds)}
+          onChange={(e) => onChange("after", e.target.value)}
+        />
+      </label>
+      <label className="flex flex-col gap-1 text-sm">
+        {endLabel}
+        <input
+          className={inputClass}
+          type="datetime-local"
+          step="1"
+          aria-label={endLabel}
+          value={toInputValue(realEnd + offsetDeltaSeconds)}
+          onChange={(e) => onChange("before", e.target.value)}
+        />
+      </label>
+      <div
+        className={`text-sm ${isInvalid ? "text-danger" : "text-muted-foreground"}`}
+      >
+        {isInvalid
+          ? t("export.toast.error.endTimeMustAfterStartTime", {
+              ns: "components/dialog",
+            })
+          : formatSecondsToDuration(realEnd - realStart, locale)}
       </div>
     </div>
   );

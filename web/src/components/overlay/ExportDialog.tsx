@@ -1318,7 +1318,12 @@ export function ExportContent({
           <Button
             aria-label={t("export.selectOrExport")}
             variant="select"
-            disabled={isStartingExport}
+            disabled={
+              isStartingExport ||
+              (selectedOption == "custom" &&
+                range !== undefined &&
+                range.before <= range.after)
+            }
             onClick={async () => {
               if (selectedOption == "timeline") {
                 setRange(
@@ -1393,9 +1398,7 @@ export function ExportPreviewDialog({
       >
         <DialogHeader className="flex-row items-center justify-between gap-2 space-y-0 pr-8">
           <div>
-            <DialogTitle>
-              {t("export.fromTimeline.previewExport")}
-            </DialogTitle>
+            <DialogTitle>{t("export.fromTimeline.previewExport")}</DialogTitle>
             <DialogDescription className="sr-only">
               {t("export.fromTimeline.previewExport")}
             </DialogDescription>
@@ -1426,11 +1429,7 @@ export function ExportPreviewDialog({
             </PopoverContent>
           </Popover>
         </DialogHeader>
-        <GenericVideoPlayer
-          source={source}
-          frigateControls
-          timelineControls
-        />
+        <GenericVideoPlayer source={source} frigateControls timelineControls />
       </DialogContent>
     </Dialog>
   );

@@ -49,25 +49,15 @@ export function CustomTimeSelector({
     [],
   );
 
-  const startTime = useMemo(() => {
-    let time = range?.after || latestTime - 3600;
+  const offsetDeltaSeconds =
+    timezoneOffset === undefined ? 0 : (timezoneOffset - localTimeOffset) * 60;
 
-    if (timezoneOffset) {
-      time = time + (timezoneOffset - localTimeOffset) * 60;
-    }
-
-    return time;
-  }, [range, latestTime, timezoneOffset, localTimeOffset]);
-
-  const endTime = useMemo(() => {
-    let time = range?.before || latestTime;
-
-    if (timezoneOffset) {
-      time = time + (timezoneOffset - localTimeOffset) * 60;
-    }
-
-    return time;
-  }, [range, latestTime, timezoneOffset, localTimeOffset]);
+  // real unix timestamps; the display values below are shifted so the local
+  // clock reads the configured timezone
+  const realStart = range?.after || latestTime - 3600;
+  const realEnd = range?.before || latestTime;
+  const startTime = realStart + offsetDeltaSeconds;
+  const endTime = realEnd + offsetDeltaSeconds;
 
   const is24Hour = use24HourTime(config);
 
@@ -136,9 +126,15 @@ export function CustomTimeSelector({
                   return;
                 }
 
+                const next = new Date(startTime * 1000);
+                next.setFullYear(
+                  day.getFullYear(),
+                  day.getMonth(),
+                  day.getDate(),
+                );
                 setRange({
-                  before: endTime,
-                  after: day.getTime() / 1000 + 1,
+                  before: realEnd,
+                  after: next.getTime() / 1000 - offsetDeltaSeconds,
                 });
               }}
             />
@@ -163,8 +159,8 @@ export function CustomTimeSelector({
                   0,
                 );
                 setRange({
-                  before: endTime,
-                  after: start.getTime() / 1000,
+                  before: realEnd,
+                  after: start.getTime() / 1000 - offsetDeltaSeconds,
                 });
               }}
             />
@@ -202,9 +198,15 @@ export function CustomTimeSelector({
                   return;
                 }
 
+                const next = new Date(endTime * 1000);
+                next.setFullYear(
+                  day.getFullYear(),
+                  day.getMonth(),
+                  day.getDate(),
+                );
                 setRange({
-                  after: startTime,
-                  before: day.getTime() / 1000,
+                  after: realStart,
+                  before: next.getTime() / 1000 - offsetDeltaSeconds,
                 });
               }}
             />
@@ -229,8 +231,8 @@ export function CustomTimeSelector({
                   0,
                 );
                 setRange({
-                  before: end.getTime() / 1000,
-                  after: startTime,
+                  before: end.getTime() / 1000 - offsetDeltaSeconds,
+                  after: realStart,
                 });
               }}
             />

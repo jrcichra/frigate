@@ -79,6 +79,8 @@ class Recordings(Model):
     segment_size = FloatField(default=0)  # this should be stored as MB
     regions = IntegerField(null=True)
     motion_heatmap = JSONField(null=True)  # 16x16 grid, 256 values (0-255)
+    s3_key = CharField(null=True)  # object key once mirrored to S3
+    evicted = BooleanField(default=False)  # local file removed, S3 copy only
 
 
 class ExportCase(Model):
@@ -97,6 +99,8 @@ class Export(Model):
     video_path = CharField(unique=True)
     thumb_path = CharField(unique=True)
     in_progress = BooleanField()
+    s3_key = CharField(null=True)  # object key once mirrored to S3
+    evicted = BooleanField(default=False)  # local file removed, S3 copy only
     export_case = ForeignKeyField(
         ExportCase,
         null=True,

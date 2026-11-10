@@ -72,6 +72,33 @@ database:
   # The path to store the SQLite DB (default: shown below)
   path: /config/frigate.db
 
+# Optional: Mirror recording segments to S3 compatible storage
+# Local files are kept, so this only adds a copy; segments are uploaded once they
+# are 10 minutes old and the object key is saved in the database.
+tiering:
+  # Optional: Enable S3 tiering (default: shown below)
+  enabled: False
+  # Required when enabled: S3 endpoint, access key and secret key
+  endpoint: http://weed-s3.seaweedfs:8333
+  access_key: "{FRIGATE_S3_ACCESS_KEY}"
+  secret_key: "{FRIGATE_S3_SECRET_KEY}"
+  # Optional: Region name (default: shown below)
+  region: us-east-1
+  # Optional: Bucket for recording segments, must already exist (default: shown below)
+  recordings_bucket: frigate-recordings
+  # Optional: Bucket for exports, must already exist (default: shown below)
+  exports_bucket: frigate-exports
+  # Optional: Base URL to read uploaded files back over HTTP with range requests,
+  # for example a SeaweedFS filer. Required for local_max_gb (default: unset)
+  read_url: http://weed-filer.seaweedfs:8888/buckets
+  # Optional: When local recordings exceed this size in GB, the oldest segments that
+  # are already in S3 are removed locally and played from S3. Uploaded exports are
+  # removed locally too (default: unset, keep everything local)
+  local_max_gb: 240
+  # Optional: Only upload segments that ended within this many hours, older ones stay
+  # local only (default: unset, upload everything)
+  backfill_hours: 48
+
 # Optional: TLS configuration
 tls:
   # Optional: Enable TLS for port 8971 (default: shown below)

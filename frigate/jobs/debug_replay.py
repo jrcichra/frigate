@@ -215,12 +215,14 @@ class ExportDebugReplaySource(DebugReplaySource):
     require recordings to still exist for the time range.
     """
 
-    def __init__(self, export: Export, duration: float) -> None:
+    def __init__(
+        self, export: Export, duration: float, video_path: str | None = None
+    ) -> None:
         self._camera = cast(str, export.camera)
         # Export.date is declared DateTimeField but Frigate writes raw unix
         # timestamps to the column.
         self._start_ts = float(cast(Any, export.date))
-        self._video_path = cast(str, export.video_path)
+        self._video_path = video_path or cast(str, export.video_path)
         self._duration = duration
 
     @property
@@ -236,7 +238,8 @@ class ExportDebugReplaySource(DebugReplaySource):
         return self._start_ts + self._duration
 
     def validate(self) -> None:
-        if not os.path.exists(self._video_path):
+        # an http(s) path is an export that is only in S3
+        if "://" not in self._video_path and not os.path.exists(self._video_path):
             raise ValueError(f"Export video file not found: {self._video_path}")
 
     def ffmpeg_input_args(self, working_dir: str) -> list[str]:

@@ -11,5 +11,6 @@ from .mqtt import *  # noqa: F403
 from .network import *  # noqa: F403
 from .proxy import *  # noqa: F403
 from .telemetry import *  # noqa: F403
+from .tiering import *  # noqa: F403
 from .tls import *  # noqa: F403
 from .ui import *  # noqa: F403

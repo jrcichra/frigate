@@ -113,12 +113,16 @@ def sync_recordings(
         ).astimezone(datetime.UTC) - datetime.timedelta(hours=36)
 
         # Gather DB recordings to inspect
+        # evicted recordings only exist in S3 so a missing local file is expected
         if limited:
             recordings_query = Recordings.select(Recordings.id, Recordings.path).where(
-                Recordings.start_time >= check_point.timestamp()
+                Recordings.start_time >= check_point.timestamp(),
+                Recordings.evicted == False,
             )
         else:
-            recordings_query = Recordings.select(Recordings.id, Recordings.path)
+            recordings_query = Recordings.select(Recordings.id, Recordings.path).where(
+                Recordings.evicted == False
+            )
 
         recordings_count = recordings_query.count()
         page_size = 1000

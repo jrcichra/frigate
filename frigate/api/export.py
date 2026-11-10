@@ -58,6 +58,7 @@ from frigate.api.defs.response.export_response import (
 from frigate.api.defs.response.generic_response import GenericResponse
 from frigate.api.defs.tags import Tags
 from frigate.api.media_auth import deny_response_for_media_uri
+from frigate.config import TieringConfig
 from frigate.const import CLIPS_DIR, EXPORT_DIR
 from frigate.jobs.export import (
     ExportJob,
@@ -76,6 +77,7 @@ from frigate.record.export import (
     PlaybackSourceEnum,
     validate_ffmpeg_args,
 )
+from frigate.record.tiering import delete_export_object, stream_export
 from frigate.util.path import sanitize_contained_path
 from frigate.util.time import is_current_hour
 
@@ -384,9 +386,6 @@ def get_export_case(case_id: str):
         )
 
 
-_ZIP_STREAM_CHUNK_SIZE = 1024 * 1024  # 1 MiB
-
-
 class _StreamingZipBuffer:
     """File-like sink for ZipFile that exposes written bytes via drain().
 
@@ -431,7 +430,9 @@ def _unique_archive_name(export: Export, used: set[str]) -> str:
     return candidate
 
 
-def _stream_case_archive(exports: list[Export]) -> Iterator[bytes]:
+def _stream_case_archive(
+    exports: list[Export], tiering: TieringConfig
+) -> Iterator[bytes]:
     """Yield bytes of a zip archive built from the given exports' mp4 files."""
     buffer = _StreamingZipBuffer()
     used_names: set[str] = set()
@@ -444,21 +445,14 @@ def _stream_case_archive(exports: list[Export]) -> Iterator[bytes]:
         allowZip64=True,
     ) as archive:
         for export in exports:
-            source = Path(export.video_path)
-            if not source.exists():
+            chunks = stream_export(export.video_path, tiering)
+            if chunks is None:
                 continue
 
             arcname = _unique_archive_name(export, used_names)
 
-            with (
-                archive.open(arcname, mode="w", force_zip64=True) as entry,
-                source.open("rb") as src,
-            ):
-                while True:
-                    chunk = src.read(_ZIP_STREAM_CHUNK_SIZE)
-                    if not chunk:
-                        break
-
+            with archive.open(arcname, mode="w", force_zip64=True) as entry:
+                for chunk in chunks:
                     entry.write(chunk)
                     yield from buffer.drain()
 
@@ -490,6 +484,7 @@ def _content_disposition(filename: str, ascii_fallback: str) -> str:
     description="Streams a zip archive containing every completed export's mp4 for the given case.",
 )
 def download_export_case(
+    request: Request,
     case_id: str,
     allowed_cameras: list[str] = Depends(get_allowed_cameras_for_filter),
 ):
@@ -522,7 +517,7 @@ def download_export_case(
         archive_base = case_id
 
     return StreamingResponse(
-        _stream_case_archive(exports),
+        _stream_case_archive(exports, request.app.frigate_config.tiering),
         media_type="application/zip",
         headers={
             "Content-Disposition": _content_disposition(
@@ -584,6 +579,7 @@ def delete_export_case(case_id: str, request: Request, delete_exports: bool = Fa
         exports = list(Export.select().where(Export.export_case == case_id))
         for export in exports:
             Path(export.video_path).unlink(missing_ok=True)
+            delete_export_object(request.app.frigate_config.tiering, export.s3_key)
             if export.thumb_path:
                 Path(export.thumb_path).unlink(missing_ok=True)
             export.delete_instance()
@@ -1115,7 +1111,7 @@ def _get_files_in_use() -> set[str]:
     summary="Bulk delete exports",
     description="Deletes one or more exports by ID. All IDs must exist and none can be in-progress.",
 )
-def bulk_delete_exports(body: ExportBulkDeleteBody):
+def bulk_delete_exports(request: Request, body: ExportBulkDeleteBody):
     exports = list(Export.select().where(Export.id << body.ids))
 
     if len(exports) != len(body.ids):
@@ -1138,6 +1134,7 @@ def bulk_delete_exports(body: ExportBulkDeleteBody):
 
     for export in exports:
         Path(export.video_path).unlink(missing_ok=True)
+        delete_export_object(request.app.frigate_config.tiering, export.s3_key)
         if export.thumb_path:
             Path(export.thumb_path).unlink(missing_ok=True)
 

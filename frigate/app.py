@@ -73,6 +73,7 @@ from frigate.output.output import OutputProcess
 from frigate.ptz.autotrack import PtzAutoTrackerThread
 from frigate.ptz.onvif import OnvifController
 from frigate.record.cleanup import RecordingCleanup
+from frigate.record.tiering import RecordingTiering
 from frigate.record.export import migrate_exports
 from frigate.record.record import RecordProcess
 from frigate.review.review import ReviewProcess
@@ -448,6 +449,13 @@ class FrigateApp:
         self.record_cleanup = RecordingCleanup(self.config, self.stop_event)
         self.record_cleanup.start()
 
+    def start_record_tiering(self) -> None:
+        if not self.config.tiering.enabled:
+            return
+
+        self.record_tiering = RecordingTiering(self.config, self.stop_event)
+        self.record_tiering.start()
+
     def start_storage_maintainer(self) -> None:
         self.storage_maintainer = StorageMaintainer(self.config, self.stop_event)
         self.storage_maintainer.start()
@@ -609,6 +617,7 @@ class FrigateApp:
         self.start_event_processor()
         self.start_event_cleanup()
         self.start_record_cleanup()
+        self.start_record_tiering()
         self.start_watchdog()
 
         # publish for the recording/review/embeddings processes, which start

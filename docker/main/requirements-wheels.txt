@@ -1,4 +1,5 @@
 aiofiles == 24.1.*
+boto3 == 1.40.*
 click == 8.1.*
 # FastAPI
 aiohttp == 3.12.*

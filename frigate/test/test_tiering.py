@@ -144,6 +144,17 @@ class TestRecordingTiering(unittest.TestCase):
         self.assertIsNone(Recordings.get_by_id("gone.mp4").s3_key)
         self.assertIsNotNone(Recordings.get_by_id("ok.mp4").s3_key)
 
+    def test_uploads_a_large_batch_in_parallel(self):
+        for i in range(40):
+            self.add_recording(f"{i}.mp4", 3600 + i)
+        client = FakeS3()
+
+        self.assertEqual(self.tiering(client).upload_pending(), 40)
+        self.assertEqual(len(client.objects), 40)
+        self.assertEqual(
+            Recordings.select().where(Recordings.s3_key.is_null()).count(), 0
+        )
+
     def test_uploads_finished_exports_only(self):
         path = self.add_export("done.mp4")
         self.add_export("busy.mp4", in_progress=True)

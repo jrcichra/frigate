@@ -12,6 +12,7 @@ import threading
 import time
 import urllib.request
 from collections.abc import Iterator
+from concurrent.futures import ThreadPoolExecutor
 from multiprocessing.synchronize import Event as MpEvent
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -34,6 +35,8 @@ UPLOAD_INTERVAL = 60
 MIN_AGE_SECONDS = 600
 # rows handled per pass; a backlog drains over several passes
 BATCH_SIZE = 500
+# parallel uploads, a single stream is too slow to drain a large backlog
+UPLOAD_WORKERS = 8
 
 
 def recording_key(path: str) -> str:
@@ -162,15 +165,24 @@ class RecordingTiering(threading.Thread):
         if self.client is None:
             self.client = create_client(self.config)
 
-        while not self.stop_event.wait(UPLOAD_INTERVAL):
+        wait = UPLOAD_INTERVAL
+
+        while not self.stop_event.wait(wait):
+            wait = UPLOAD_INTERVAL
+
             # background task, a failed pass must not stop the next one
             try:
-                self.upload_pending()
+                uploaded = self.upload_pending()
                 self.upload_exports()
                 self.evict_recordings()
                 self.evict_exports()
             except Exception:
                 logger.exception("Recording tiering pass failed")
+                continue
+
+            # a full batch means a backlog remains, keep going without idling
+            if uploaded >= BATCH_SIZE:
+                wait = 0
 
         logger.info("Exiting recording tiering...")
 
@@ -203,10 +215,34 @@ class RecordingTiering(threading.Thread):
 
         return True
 
-    def upload_pending(self) -> int:
-        """Upload one batch of recording segments, returns the number uploaded."""
+    def _upload_all(
+        self, bucket: str, items: list[tuple[Any, str, str]]
+    ) -> list[tuple[Any, str, str]]:
+        """Upload (id, path, key) items in parallel, returns the verified ones.
+
+        Stops starting new uploads once S3 reports an error.
+        """
         from botocore.exceptions import BotoCoreError, ClientError
 
+        down = threading.Event()
+
+        def work(item: tuple[Any, str, str]) -> bool:
+            if down.is_set() or self.stop_event.is_set():
+                return False
+
+            try:
+                return self._upload(bucket, item[1], item[2])
+            except (BotoCoreError, ClientError):
+                down.set()
+                return False
+
+        with ThreadPoolExecutor(UPLOAD_WORKERS) as pool:
+            done = list(pool.map(work, items))
+
+        return [item for item, ok in zip(items, done) if ok]
+
+    def upload_pending(self) -> int:
+        """Upload one batch of recording segments, returns the number uploaded."""
         now = time.time()
         conditions = [
             Recordings.s3_key.is_null(),
@@ -226,22 +262,13 @@ class RecordingTiering(threading.Thread):
             .limit(BATCH_SIZE)
             .namedtuples()
         )
-        uploaded = 0
+        items = [(r.id, r.path, recording_key(r.path)) for r in pending]
+        verified = self._upload_all(self.config.recordings_bucket, items)
 
-        for recording in pending:
-            if self.stop_event.is_set():
-                break
+        for recording_id, _, key in verified:
+            Recordings.update(s3_key=key).where(Recordings.id == recording_id).execute()
 
-            key = recording_key(recording.path)
-
-            try:
-                if not self._upload(self.config.recordings_bucket, recording.path, key):
-                    continue
-            except (BotoCoreError, ClientError):
-                break
-
-            Recordings.update(s3_key=key).where(Recordings.id == recording.id).execute()
-            uploaded += 1
+        uploaded = len(verified)
 
         if uploaded:
             logger.debug("Uploaded %s recording segments to S3", uploaded)
@@ -250,30 +277,19 @@ class RecordingTiering(threading.Thread):
 
     def upload_exports(self) -> int:
         """Upload finished exports, returns the number uploaded."""
-        from botocore.exceptions import BotoCoreError, ClientError
-
         pending = (
             Export.select(Export.id, Export.video_path)
             .where(Export.in_progress == False, Export.s3_key.is_null())
             .limit(BATCH_SIZE)
             .namedtuples()
         )
-        uploaded = 0
+        items = [(e.id, e.video_path, export_key(e.video_path)) for e in pending]
+        verified = self._upload_all(self.config.exports_bucket, items)
 
-        for export in pending:
-            if self.stop_event.is_set():
-                break
+        for export_id, _, key in verified:
+            Export.update(s3_key=key).where(Export.id == export_id).execute()
 
-            key = export_key(export.video_path)
-
-            try:
-                if not self._upload(self.config.exports_bucket, export.video_path, key):
-                    continue
-            except (BotoCoreError, ClientError):
-                break
-
-            Export.update(s3_key=key).where(Export.id == export.id).execute()
-            uploaded += 1
+        uploaded = len(verified)
 
         if uploaded:
             logger.debug("Uploaded %s exports to S3", uploaded)

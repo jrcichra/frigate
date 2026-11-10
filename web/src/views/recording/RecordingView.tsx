@@ -304,7 +304,9 @@ export function RecordingView({
         return;
       }
 
-      mainControllerRef.current?.scrubToTimestamp(currentTime);
+      // save the position if the hourly preview isn't loaded yet (e.g. just
+      // crossed an hour boundary) so it seeks there once it finishes loading
+      mainControllerRef.current?.scrubToTimestamp(currentTime, true);
 
       Object.values(previewRefs.current).forEach((controller) => {
         controller.scrubToTimestamp(currentTime);

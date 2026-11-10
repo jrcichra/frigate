@@ -304,7 +304,14 @@ export const formatSecondsToDuration = (
     return "Invalid duration";
   }
 
-  const duration = intervalToDuration({ start: 0, end: seconds * 1000 });
+  // Build from total hours: intervalToDuration rolls 24h+ into days/months,
+  // which the format below would silently drop (a day and a second -> "1 second")
+  const total = Math.round(seconds);
+  const duration = {
+    hours: Math.floor(total / 3600),
+    minutes: Math.floor((total % 3600) / 60),
+    seconds: total % 60,
+  };
   return formatDuration(duration, {
     format: ["hours", "minutes", "seconds"],
     delimiter: ", ",

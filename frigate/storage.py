@@ -134,6 +134,8 @@ class StorageMaintainer(threading.Thread):
                 Recordings.segment_size,
                 Recordings.path,
             )
+            # evicted segments only exist in S3 and use no local space
+            .where(Recordings.evicted == False)
             .order_by(Recordings.start_time.asc())
             .namedtuples()
             .iterator()
@@ -208,6 +210,7 @@ class StorageMaintainer(threading.Thread):
                     Recordings.path,
                     Recordings.segment_size,
                 )
+                .where(Recordings.evicted == False)
                 .order_by(Recordings.start_time.asc())
                 .namedtuples()
                 .iterator()

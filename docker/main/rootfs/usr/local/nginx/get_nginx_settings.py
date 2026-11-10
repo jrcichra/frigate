@@ -52,11 +52,30 @@ listen_config["external_port"] = external_port
 
 base_path = os.environ.get("FRIGATE_BASE_PATH", "")
 
+tiering_config: dict[str, Any] = config.get("tiering", {})
+tiering_config.setdefault("enabled", False)
+tiering_config.setdefault("read_url", "")
+tiering_config.setdefault("exports_bucket", "frigate-exports")
+
+# nginx only resolves hostnames in variable proxy_pass targets at request time
+# with an explicit resolver, so reuse the container's nameservers
+nameservers: list[str] = []
+try:
+    with open("/etc/resolv.conf") as f:
+        for line in f:
+            parts = line.split()
+            if len(parts) >= 2 and parts[0] == "nameserver":
+                nameservers.append(f"[{parts[1]}]" if ":" in parts[1] else parts[1])
+except OSError:
+    pass
+
 result: dict[str, Any] = {
     "tls": tls_config,
     "ipv6": ipv6_config,
     "listen": listen_config,
     "base_path": base_path,
+    "tiering": tiering_config,
+    "resolver": " ".join(nameservers) or "127.0.0.1",
 }
 
 print(json.dumps(result))

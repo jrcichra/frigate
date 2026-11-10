@@ -1,0 +1,32 @@
+{{ if and .tiering.enabled .tiering.read_url }}
+# read tiered recordings and exports back from S3 over HTTP with range requests
+vod_remote_upstream_location /tiered;
+vod_initial_read_size 131072;
+
+location ~ ^/tiered/(?<tiered_path>.+)$ {
+    internal;
+    resolver {{ .resolver }} valid=30s;
+    set $tiered_base "{{ .tiering.read_url }}";
+    proxy_pass $tiered_base/$tiered_path;
+    proxy_http_version 1.1;
+    proxy_set_header Connection "";
+    access_log off;
+}
+
+# exports that were removed from local disk after upload
+location @tiered_exports {
+    resolver {{ .resolver }} valid=30s;
+    set $tiered_base "{{ .tiering.read_url }}";
+    set $tiered_name "";
+    if ($uri ~ "^/exports/([^/]+)$") {
+        set $tiered_name $1;
+    }
+    proxy_pass $tiered_base/{{ .tiering.exports_bucket }}/$tiered_name;
+    proxy_http_version 1.1;
+    proxy_set_header Connection "";
+}
+{{ else }}
+location @tiered_exports {
+    return 404;
+}
+{{ end }}

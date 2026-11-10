@@ -251,6 +251,50 @@
       "description": "Enable an outbound check to detect if a newer Frigate version is available."
     }
   },
+  "tiering": {
+    "label": "Storage tiering",
+    "description": "Settings for mirroring recording segments to S3 compatible storage.",
+    "enabled": {
+      "label": "Enable S3 tiering",
+      "description": "Mirror finished recording segments to S3 compatible storage."
+    },
+    "endpoint": {
+      "label": "S3 endpoint",
+      "description": "URL of the S3 compatible endpoint, for example http://weed-s3.seaweedfs:8333."
+    },
+    "region": {
+      "label": "S3 region",
+      "description": "Region name sent to the S3 endpoint; most self hosted servers ignore it."
+    },
+    "access_key": {
+      "label": "S3 access key",
+      "description": "S3 access key; can be provided via environment variables or secrets."
+    },
+    "secret_key": {
+      "label": "S3 secret key",
+      "description": "S3 secret key; can be provided via environment variables or secrets."
+    },
+    "recordings_bucket": {
+      "label": "Recordings bucket",
+      "description": "Bucket that receives recording segments; it must already exist."
+    },
+    "exports_bucket": {
+      "label": "Exports bucket",
+      "description": "Bucket that receives exported videos; it must already exist."
+    },
+    "read_url": {
+      "label": "Read URL",
+      "description": "Base URL used to read uploaded files back over HTTP with range requests, for example http://weed-filer.seaweedfs:8888/buckets for a SeaweedFS filer. Required for local_max_gb."
+    },
+    "local_max_gb": {
+      "label": "Local recordings limit",
+      "description": "When local recordings exceed this size, the oldest segments that are already in S3 are removed from local disk and played from S3. Exports are removed locally once uploaded. Leave unset to keep everything local."
+    },
+    "backfill_hours": {
+      "label": "Backfill window",
+      "description": "Only upload segments that ended within this many hours; older recordings stay local only. Leave unset to upload everything."
+    }
+  },
   "tls": {
     "label": "TLS",
     "description": "TLS settings for Frigate's web endpoints (port 8971).",

@@ -18,6 +18,7 @@ from frigate.jobs.debug_replay import (
     start_debug_replay_job,
 )
 from frigate.models import Export
+from frigate.record.tiering import export_source
 from frigate.util.services import get_video_properties
 
 logger = logging.getLogger(__name__)
@@ -169,8 +170,10 @@ async def start_debug_replay_from_export(
             status_code=404,
         )
 
+    # exports that were removed from local disk are read from S3
+    video_path = export_source(export.video_path, request.app.frigate_config.tiering)
     properties = await get_video_properties(
-        request.app.frigate_config.ffmpeg, export.video_path, get_duration=True
+        request.app.frigate_config.ffmpeg, video_path, get_duration=True
     )
     duration = properties.get("duration", -1)
 
@@ -184,7 +187,9 @@ async def start_debug_replay_from_export(
         )
 
     replay_manager = request.app.replay_manager
-    source = ExportDebugReplaySource(export=export, duration=float(duration))
+    source = ExportDebugReplaySource(
+        export=export, duration=float(duration), video_path=video_path
+    )
 
     try:
         job_id = await asyncio.to_thread(

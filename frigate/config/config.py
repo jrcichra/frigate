@@ -70,6 +70,7 @@ from .network import NetworkingConfig
 from .profile import ProfileDefinitionConfig
 from .proxy import ProxyConfig
 from .telemetry import TelemetryConfig
+from .tiering import TieringConfig
 from .tls import TlsConfig
 from .ui import UIConfig
 
@@ -485,6 +486,11 @@ class FrigateConfig(FrigateBaseModel):
         default_factory=TelemetryConfig,
         title="Telemetry",
         description="System telemetry and stats options including GPU and network bandwidth monitoring.",
+    )
+    tiering: TieringConfig = Field(
+        default_factory=TieringConfig,
+        title="Storage tiering",
+        description="Settings for mirroring recording segments to S3 compatible storage.",
     )
     tls: TlsConfig = Field(
         default_factory=TlsConfig,

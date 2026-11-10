@@ -35,6 +35,7 @@ from frigate.config.camera.updater import (
 )
 from frigate.config.env import substitute_frigate_vars
 from frigate.models import User
+from frigate.record.tiering import delete_export_object, export_key
 from frigate.util.builtin import (
     clean_camera_user_pass,
     clear_orphaned_comments,
@@ -1293,6 +1294,15 @@ async def delete_camera(
     await asyncio.to_thread(
         cleanup_camera_files, camera_name, export_paths if delete_exports else None
     )
+
+    if delete_exports:
+        for export_path in export_paths:
+            if export_path.endswith(".mp4"):
+                await asyncio.to_thread(
+                    delete_export_object,
+                    request.app.frigate_config.tiering,
+                    export_key(export_path),
+                )
 
     # Best-effort go2rtc stream removal
     try:

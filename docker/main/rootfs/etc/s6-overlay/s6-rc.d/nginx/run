@@ -89,6 +89,11 @@ python3 /usr/local/nginx/get_nginx_settings.py | \
     tempio -template /usr/local/nginx/templates/listen.gotmpl \
            -out /usr/local/nginx/conf/listen.conf
 
+# build template for tiered (S3) recordings and exports
+python3 /usr/local/nginx/get_nginx_settings.py | \
+    tempio -template /usr/local/nginx/templates/tiering.gotmpl \
+           -out /usr/local/nginx/conf/tiering.conf
+
 # Replace the bash process with the NGINX process, redirecting stderr to stdout
 exec 2>&1
 exec \

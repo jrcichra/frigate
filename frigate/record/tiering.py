@@ -104,10 +104,51 @@ def stream_export(path: str, tiering: "TieringConfig") -> Iterator[bytes] | None
         return _read_chunks(open(path, "rb"))
 
     try:
-        return _read_chunks(urllib.request.urlopen(source, timeout=30))
+        response = urllib.request.urlopen(source, timeout=30)
     except OSError:
         logger.warning("Unable to read export %s from S3", os.path.basename(path))
         return None
+
+    return _read_remote(source, response)
+
+
+# resumes after a dropped connection before giving up on an export
+REMOTE_READ_ATTEMPTS = 5
+
+
+def _read_remote(url: str, response: Any) -> Iterator[bytes]:
+    """Stream an object to its full Content-Length.
+
+    http.client returns an empty read instead of raising when the server closes
+    the connection early, which would silently truncate the file, so the rest is
+    fetched with a range request and a short object raises.
+    """
+    length = int(response.headers["Content-Length"])
+    received = 0
+
+    for attempt in range(REMOTE_READ_ATTEMPTS):
+        if attempt:
+            request = urllib.request.Request(
+                url, headers={"Range": f"bytes={received}-"}
+            )
+            response = urllib.request.urlopen(request, timeout=30)
+
+            if response.status != 206:
+                response.close()
+                raise OSError(f"{url} ignored the range request")
+
+        try:
+            for chunk in _read_chunks(response):
+                received += len(chunk)
+                yield chunk
+        except OSError:
+            # dropped mid read, resume from what was received
+            pass
+
+        if received >= length:
+            return
+
+    raise OSError(f"{url} ended at {received} of {length} bytes")
 
 
 def _read_chunks(stream: Any, chunk_size: int = 1024 * 1024) -> Iterator[bytes]:
@@ -144,6 +185,30 @@ def delete_export_object(tiering: "TieringConfig", s3_key: str | None) -> None:
         create_client(tiering).delete_object(Bucket=tiering.exports_bucket, Key=s3_key)
     except (BotoCoreError, ClientError):
         logger.warning("Unable to delete export %s from S3", s3_key)
+
+
+def delete_recording_objects(tiering: "TieringConfig", keys: list[str]) -> None:
+    """Delete the S3 copies of recordings, called when recordings are deleted."""
+    if not tiering.enabled or not keys:
+        return
+
+    from botocore.exceptions import BotoCoreError, ClientError
+
+    client = create_client(tiering)
+
+    # delete_objects takes at most 1000 keys
+    for i in range(0, len(keys), 1000):
+        try:
+            client.delete_objects(
+                Bucket=tiering.recordings_bucket,
+                Delete={
+                    "Objects": [{"Key": key} for key in keys[i : i + 1000]],
+                    "Quiet": True,
+                },
+            )
+        except (BotoCoreError, ClientError):
+            logger.warning("Unable to delete %s recordings from S3", len(keys[i:]))
+            return
 
 
 class RecordingTiering(threading.Thread):

@@ -29,6 +29,7 @@ from frigate.data_processing.types import PostProcessDataEnum
 from frigate.genai import GenAIClient
 from frigate.genai.manager import GenAIClientManager
 from frigate.models import Recordings, ReviewSegment
+from frigate.record.tiering import recording_source
 from frigate.util.builtin import EventsPerSecond, InferenceSpeed
 from frigate.util.image import get_image_from_recording
 
@@ -446,7 +447,7 @@ class ReviewDescriptionProcessor(PostProcessorApi):
                 time_in_segment = ts - recording.start_time
                 return get_image_from_recording(
                     self.config.ffmpeg,
-                    recording.path,
+                    recording_source(recording.path, self.config.tiering),
                     time_in_segment,
                     "mjpeg",
                     height=height,

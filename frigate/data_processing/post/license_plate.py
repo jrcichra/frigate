@@ -21,6 +21,7 @@ from frigate.data_processing.common.license_plate.model import (
 )
 from frigate.data_processing.types import PostProcessDataEnum
 from frigate.models import Recordings
+from frigate.record.tiering import recording_source
 from frigate.util.image import get_image_from_recording
 
 from ..types import DataProcessorMetrics
@@ -116,7 +117,11 @@ class LicensePlatePostProcessor(LicensePlateProcessingMixin, PostProcessorApi): 
             codec = "mjpeg"
 
             image_data = get_image_from_recording(
-                self.config.ffmpeg, recording.path, time_in_segment, codec, None
+                self.config.ffmpeg,
+                recording_source(recording.path, self.config.tiering),
+                time_in_segment,
+                codec,
+                None,
             )
 
             if not image_data:

@@ -8,6 +8,7 @@ from pathvalidate import sanitize_filename
 
 from frigate.const import CACHE_DIR, MAX_SEGMENT_DURATION
 from frigate.models import Recordings
+from frigate.record.tiering import recording_source
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +18,7 @@ def get_audio_from_recording(
     camera_name: str,
     start_ts: float,
     end_ts: float,
+    tiering,
     sample_rate: int = 16000,
 ) -> bytes | None:
     """Extract audio from recording files between start_ts and end_ts in WAV format suitable for sherpa-onnx.
@@ -26,6 +28,7 @@ def get_audio_from_recording(
         camera_name: Name of the camera
         start_ts: Start timestamp in seconds
         end_ts: End timestamp in seconds
+        tiering: Tiering configuration, evicted segments are read from S3
         sample_rate: Sample rate for output audio (default 16kHz for sherpa-onnx)
 
     Returns:
@@ -64,7 +67,7 @@ def get_audio_from_recording(
     try:
         with open(file_path, "w") as file:
             for clip in recordings:
-                file.write(f"file '{clip.path}'\n")
+                file.write(f"file '{recording_source(clip.path, tiering)}'\n")
                 if clip.start_time < start_ts:
                     file.write(f"inpoint {int(start_ts - clip.start_time)}\n")
                 if clip.end_time > end_ts:
@@ -76,7 +79,7 @@ def get_audio_from_recording(
             "-loglevel",
             "warning",
             "-protocol_whitelist",
-            "pipe,file",
+            "pipe,file,http,tcp",
             "-f",
             "concat",
             "-safe",

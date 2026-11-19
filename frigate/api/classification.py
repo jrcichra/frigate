@@ -1269,7 +1269,9 @@ async def generate_state_examples(request: Request, body: GenerateStateExamplesB
         if camera_name in request.app.frigate_config.cameras
     }
 
-    collect_state_classification_examples(model_name, cameras_normalized)
+    collect_state_classification_examples(
+        model_name, cameras_normalized, request.app.frigate_config.tiering
+    )
 
     return JSONResponse(
         content={"success": True, "message": "Example generation completed"},

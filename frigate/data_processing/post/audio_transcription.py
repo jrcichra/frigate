@@ -108,6 +108,7 @@ class AudioTranscriptionPostProcessor(PostProcessorApi):
                 camera_name,
                 start_ts,
                 end_ts,
+                self.config.tiering,
                 sample_rate=16000,
             )
 

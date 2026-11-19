@@ -13,7 +13,7 @@ import numpy as np
 
 from frigate.comms.embeddings_updater import EmbeddingsRequestEnum, EmbeddingsRequestor
 from frigate.comms.inter_process import InterProcessRequestor
-from frigate.config import FfmpegConfig
+from frigate.config import FfmpegConfig, TieringConfig
 from frigate.const import (
     CLIPS_DIR,
     MODEL_CACHE_DIR,
@@ -22,6 +22,7 @@ from frigate.const import (
 )
 from frigate.log import redirect_output_to_logger, suppress_stderr_during
 from frigate.models import Event, Recordings, ReviewSegment
+from frigate.record.tiering import recording_source
 from frigate.types import ModelStatusTypesEnum
 from frigate.util.downloader import ModelDownloader
 from frigate.util.file import get_event_thumbnail_bytes, load_event_snapshot_image
@@ -353,7 +354,9 @@ def kickoff_model_training(
 
 @staticmethod
 def collect_state_classification_examples(
-    model_name: str, cameras: dict[str, tuple[float, float, float, float]]
+    model_name: str,
+    cameras: dict[str, tuple[float, float, float, float]],
+    tiering: TieringConfig,
 ) -> None:
     """
     Collect representative state classification examples from review items.
@@ -394,7 +397,7 @@ def collect_state_classification_examples(
 
     # Step 3: Extract keyframes from recordings with crops applied
     keyframes = _extract_keyframes(
-        "/usr/lib/ffmpeg/8.0/bin/ffmpeg", timestamps, temp_dir, cameras
+        "/usr/lib/ffmpeg/8.0/bin/ffmpeg", timestamps, temp_dir, cameras, tiering
     )
 
     # Step 4: Select 24 most visually distinct images (they're already cropped)
@@ -513,6 +516,7 @@ def _extract_keyframes(
     timestamps: list[dict],
     output_dir: str,
     camera_crops: dict[str, tuple[float, float, float, float]],
+    tiering: TieringConfig,
 ) -> list[str]:
     """
     Extract keyframes from recordings at specified timestamps and crop to specified regions.
@@ -569,7 +573,7 @@ def _extract_keyframes(
             config = FfmpegConfig(path="/usr/lib/ffmpeg/8.0")
             image_data = get_image_from_recording(
                 config,
-                recording.path,
+                recording_source(recording.path, tiering),
                 relative_time,
                 codec="mjpeg",
                 height=None,

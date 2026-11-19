@@ -1,5 +1,6 @@
 """Recording APIs."""
 
+import asyncio
 import datetime as dt
 import logging
 from datetime import datetime, timedelta
@@ -27,6 +28,7 @@ from frigate.api.defs.response.generic_response import GenericResponse
 from frigate.api.defs.tags import Tags
 from frigate.const import MAX_SEGMENT_DURATION, RECORD_DIR
 from frigate.models import Event, Recordings
+from frigate.record.tiering import delete_recording_objects
 from frigate.util.time import get_dst_transitions
 
 logger = logging.getLogger(__name__)
@@ -368,6 +370,7 @@ async def no_recordings(
     """,
 )
 async def delete_recordings(
+    request: Request,
     start: float = PathParam(..., description="Start timestamp (unix)"),
     end: float = PathParam(..., description="End timestamp (unix)"),
     params: RecordingsDeleteQueryParams = Depends(),
@@ -439,18 +442,22 @@ async def delete_recordings(
         clauses.append(~keep_condition)
 
     recordings_to_delete = (
-        Recordings.select(Recordings.id, Recordings.path)
+        Recordings.select(Recordings.id, Recordings.path, Recordings.s3_key)
         .where(reduce(operator.and_, clauses))
         .dicts()
         .iterator()
     )
 
     recording_ids = []
+    s3_keys = []
     deleted_count = 0
     error_count = 0
 
     for recording in recordings_to_delete:
         recording_ids.append(recording["id"])
+
+        if recording["s3_key"]:
+            s3_keys.append(recording["s3_key"])
 
         try:
             Path(recording["path"]).unlink(missing_ok=True)
@@ -458,6 +465,10 @@ async def delete_recordings(
         except Exception as e:
             logger.error(f"Failed to delete recording file {recording['path']}: {e}")
             error_count += 1
+
+    await asyncio.to_thread(
+        delete_recording_objects, request.app.frigate_config.tiering, s3_keys
+    )
 
     if recording_ids:
         max_deletes = 100000

@@ -12,6 +12,7 @@ from playhouse.sqlite_ext import SqliteExtDatabase
 from frigate.models import Export, ExportCase, Recordings
 from frigate.record.tiering import (
     RecordingTiering,
+    delete_recording_objects,
     export_source,
     recording_source,
     stream_export,
@@ -30,6 +31,11 @@ class FakeS3:
             raise EndpointConnectionError(endpoint_url="http://s3")
 
         self.objects[(bucket, key)] = os.path.getsize(path)
+
+    def delete_objects(self, Bucket, Delete):
+        assert len(Delete["Objects"]) <= 1000
+        for obj in Delete["Objects"]:
+            self.objects.pop((Bucket, obj["Key"]), None)
 
     def head_object(self, Bucket, Key):
         size = self.objects[(Bucket, Key)]
@@ -252,6 +258,65 @@ class TestRecordingTiering(unittest.TestCase):
 
         self.assertEqual(b"".join(stream_export(path, tiering)), b"x" * 100)
         self.assertIsNone(stream_export(path + ".missing", tiering))
+
+    def test_stream_export_resumes_a_dropped_s3_read(self):
+        data = bytes(range(256)) * 10
+        requests = []
+
+        class Response:
+            # the server closes after 1000 bytes, which http.client reports
+            # as an ordinary end of stream
+            def __init__(self, start):
+                self.body = data[start : start + 1000]
+                self.status = 206 if start else 200
+                self.headers = {"Content-Length": str(len(data) - start)}
+
+            def read(self, n):
+                chunk, self.body = self.body[:n], self.body[n:]
+                return chunk
+
+            def close(self):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                pass
+
+        def urlopen(request, timeout):
+            header = getattr(request, "headers", {}).get("Range", "bytes=0-")
+            start = int(header.split("=")[1].rstrip("-"))
+            requests.append(start)
+            return Response(start)
+
+        gone = "/media/frigate/exports/gone.mp4"
+
+        with patch("frigate.record.tiering.urllib.request.urlopen", urlopen):
+            self.assertEqual(b"".join(stream_export(gone, self.config.tiering)), data)
+            self.assertEqual(requests, [0, 1000, 2000])
+
+            # a server that never gets further raises instead of truncating
+            data = data * 10
+            requests.clear()
+            with self.assertRaises(OSError):
+                b"".join(stream_export(gone, self.config.tiering))
+
+    def test_deleting_recordings_removes_their_s3_copies(self):
+        s3 = FakeS3()
+        keys = [f"2026-01-01/00/cam/{i}.mp4" for i in range(1500)]
+        s3.objects = {("recs", key): 1 for key in keys + ["keep.mp4"]}
+
+        with patch("frigate.record.tiering.create_client", return_value=s3):
+            delete_recording_objects(self.config.tiering, keys)
+
+        self.assertEqual(list(s3.objects), [("recs", "keep.mp4")])
+
+        # nothing is sent when tiering is off
+        self.config.tiering.enabled = False
+        with patch("frigate.record.tiering.create_client") as client:
+            delete_recording_objects(self.config.tiering, keys)
+        client.assert_not_called()
 
 
 if __name__ == "__main__":

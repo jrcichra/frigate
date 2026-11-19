@@ -613,7 +613,10 @@ def motion_activity(
     # get scale in seconds
     scale = params.scale
 
-    clauses = [(Recordings.start_time > after) & (Recordings.end_time < before)]
+    # filter on start_time only: end_time isn't in a covering index with motion,
+    # so it forced a table lookup per row (~30x slower). The one segment that
+    # may run past `before` lands in the last bucket either way.
+    clauses = [(Recordings.start_time > after) & (Recordings.start_time < before)]
     clauses.append(Recordings.motion > 0)
 
     if cameras != "all":

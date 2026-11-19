@@ -507,6 +507,28 @@ class TestHttpMedia(BaseTestHttp):
                         recording["id"] for recording in response.json()
                     ] == expected_ids
 
+    def test_recordings_unavailable_sees_segment_spanning_start(self):
+        """A segment that started up to MAX_SEGMENT_DURATION before `after`
+        still covers the range; one that ended before it does not."""
+        params = {"after": REQUEST_START, "before": REQUEST_END, "scale": 10}
+        with AuthTestClient(self.app) as client:
+            for start, end, gaps in (
+                (-MAX_SEGMENT_DURATION + 0.5, 120, []),
+                (
+                    -MAX_SEGMENT_DURATION + 1,
+                    -1,
+                    [{"start_time": REQUEST_START, "end_time": REQUEST_END}],
+                ),
+            ):
+                with self.subTest(start=start, end=end):
+                    Recordings.delete().execute()
+                    super().insert_mock_recording(
+                        "r", REQUEST_START + start, REQUEST_START + end
+                    )
+                    response = client.get("/recordings/unavailable", params=params)
+                    assert response.status_code == 200
+                    assert response.json() == gaps
+
     def test_vod_handles_all_range_relations(self):
         """VOD clips every interval relation with positive playback duration."""
         with (

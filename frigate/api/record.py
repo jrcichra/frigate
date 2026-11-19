@@ -76,18 +76,20 @@ def all_recordings_summary(
     else:
         camera_list = allowed_cameras
 
-    time_range_query = (
-        Recordings.select(
-            fn.MIN(Recordings.start_time).alias("min_time"),
-            fn.MAX(Recordings.start_time).alias("max_time"),
+    # SQLite can't use the index for MIN/MAX with an IN list (scans every row);
+    # an ordered LIMIT 1 per end can.
+    def edge(order):
+        row = (
+            Recordings.select(Recordings.start_time)
+            .where(Recordings.camera << camera_list)
+            .order_by(order)
+            .limit(1)
+            .first()
         )
-        .where(Recordings.camera << camera_list)
-        .dicts()
-        .get()
-    )
+        return row.start_time if row else None
 
-    min_time = time_range_query.get("min_time")
-    max_time = time_range_query.get("max_time")
+    min_time = edge(Recordings.start_time.asc())
+    max_time = edge(Recordings.start_time.desc())
 
     if min_time is None or max_time is None:
         return JSONResponse(content={})
@@ -284,7 +286,11 @@ async def no_recordings(
     scale = params.scale
 
     clauses = [
-        (Recordings.end_time >= after) & (Recordings.start_time <= before),
+        # lower start_time bound lets SQLite use the index instead of walking
+        # every older segment; segments are shorter than MAX_SEGMENT_DURATION
+        (Recordings.start_time >= after - MAX_SEGMENT_DURATION)
+        & (Recordings.end_time >= after)
+        & (Recordings.start_time <= before),
         (Recordings.camera << camera_list),
     ]
 

@@ -33,6 +33,7 @@ from frigate.api.defs.response.review_response import (
     ReviewSummaryResponse,
 )
 from frigate.api.defs.tags import Tags
+from frigate.const import MAX_SEGMENT_DURATION
 from frigate.embeddings import EmbeddingsContext
 from frigate.models import Recordings, ReviewSegment, UserReviewStatus
 from frigate.review.types import SeverityEnum
@@ -566,6 +567,13 @@ def delete_reviews(body: ReviewModifyMultipleBody):
                 )
             )
             .where(Recordings.camera == camera_name)
+            # segments are shorter than MAX_SEGMENT_DURATION, so this keeps the same
+            # rows while letting the start_time index skip all older recordings
+            .where(
+                Recordings.start_time.between(
+                    start_time - MAX_SEGMENT_DURATION, end_time
+                )
+            )
             .dicts()
             .iterator()
         )

@@ -20,7 +20,7 @@ from peewee import ModelSelect
 
 from frigate.config import FrigateConfig
 from frigate.config.camera.updater import CameraConfigUpdatePublisher
-from frigate.const import REPLAY_CAMERA_PREFIX, REPLAY_DIR
+from frigate.const import MAX_SEGMENT_DURATION, REPLAY_CAMERA_PREFIX, REPLAY_DIR
 from frigate.jobs.export import JobStatePublisher
 from frigate.jobs.job import Job
 from frigate.jobs.manager import job_is_running, set_current_job
@@ -110,6 +110,9 @@ def query_recordings(source_camera: str, start_ts: float, end_ts: float) -> Mode
             | ((start_ts > Recordings.start_time) & (end_ts < Recordings.end_time))
         )
         .where(Recordings.camera == source_camera)
+        # segments are shorter than MAX_SEGMENT_DURATION, so this keeps the same
+        # rows while letting the start_time index skip all older recordings
+        .where(Recordings.start_time.between(start_ts - MAX_SEGMENT_DURATION, end_ts))
         .order_by(Recordings.start_time.asc())
     )
     return cast(ModelSelect, query)

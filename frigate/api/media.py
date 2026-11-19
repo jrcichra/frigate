@@ -505,6 +505,9 @@ async def recording_clip(
             | ((start_ts > Recordings.start_time) & (end_ts < Recordings.end_time))
         )
         .where(Recordings.camera == camera_name)
+        # segments are shorter than MAX_SEGMENT_DURATION, so this keeps the same
+        # rows while letting the start_time index skip all older recordings
+        .where(Recordings.start_time.between(start_ts - MAX_SEGMENT_DURATION, end_ts))
         .order_by(Recordings.start_time.asc())
     )
 

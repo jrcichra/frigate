@@ -6,7 +6,7 @@ import subprocess as sp
 
 from pathvalidate import sanitize_filename
 
-from frigate.const import CACHE_DIR
+from frigate.const import CACHE_DIR, MAX_SEGMENT_DURATION
 from frigate.models import Recordings
 
 logger = logging.getLogger(__name__)
@@ -44,6 +44,9 @@ def get_audio_from_recording(
             | ((start_ts > Recordings.start_time) & (end_ts < Recordings.end_time))
         )
         .where(Recordings.camera == camera_name)
+        # segments are shorter than MAX_SEGMENT_DURATION, so this keeps the same
+        # rows while letting the start_time index skip all older recordings
+        .where(Recordings.start_time.between(start_ts - MAX_SEGMENT_DURATION, end_ts))
         .order_by(Recordings.start_time.asc())
     )
 

@@ -15,7 +15,7 @@ import numpy as np
 
 from frigate.comms.inter_process import InterProcessRequestor
 from frigate.config import FrigateConfig
-from frigate.const import UPDATE_JOB_STATE
+from frigate.const import MAX_SEGMENT_DURATION, UPDATE_JOB_STATE
 from frigate.jobs.job import Job
 from frigate.jobs.manager import (
     get_job_by_id,
@@ -485,6 +485,14 @@ class MotionSearchRunner(threading.Thread):
                 )
             )
             .where(Recordings.camera == camera_name)
+            # segments are shorter than MAX_SEGMENT_DURATION, so this keeps the same
+            # rows while letting the start_time index skip all older recordings
+            .where(
+                Recordings.start_time.between(
+                    self.job.start_time_range - MAX_SEGMENT_DURATION,
+                    self.job.end_time_range,
+                )
+            )
             .order_by(Recordings.start_time.asc())
         )
 

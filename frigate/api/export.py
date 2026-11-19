@@ -58,7 +58,7 @@ from frigate.api.defs.response.export_response import (
 from frigate.api.defs.response.generic_response import GenericResponse
 from frigate.api.defs.tags import Tags
 from frigate.api.media_auth import deny_response_for_media_uri
-from frigate.const import CLIPS_DIR, EXPORT_DIR
+from frigate.const import CLIPS_DIR, EXPORT_DIR, MAX_SEGMENT_DURATION
 from frigate.jobs.export import (
     ExportJob,
     ExportQueueFullError,
@@ -176,6 +176,13 @@ def _validate_export_source(
                 )
             )
             .where(Recordings.camera == camera_name)
+            # segments are shorter than MAX_SEGMENT_DURATION, so this keeps the same
+            # rows while letting the start_time index skip all older recordings
+            .where(
+                Recordings.start_time.between(
+                    start_time - MAX_SEGMENT_DURATION, end_time
+                )
+            )
             .count()
         )
 
@@ -242,6 +249,11 @@ def _get_item_recording_export_errors(
                 | (
                     (min_start > Recordings.start_time)
                     & (max_end < Recordings.end_time)
+                ),
+                # segments are shorter than MAX_SEGMENT_DURATION, so this keeps the
+                # same rows while letting the start_time index skip older recordings
+                Recordings.start_time.between(
+                    min_start - MAX_SEGMENT_DURATION, max_end
                 ),
             )
             .iterator()

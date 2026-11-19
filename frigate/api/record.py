@@ -410,6 +410,9 @@ async def delete_recordings(
             | ((start > Recordings.start_time) & (end < Recordings.end_time))
         ),
         (Recordings.camera << camera_list),
+        # segments are shorter than MAX_SEGMENT_DURATION, so this keeps the same
+        # rows while letting the start_time index skip all older recordings
+        Recordings.start_time.between(start - MAX_SEGMENT_DURATION, end),
     ]
 
     keep_clauses = []

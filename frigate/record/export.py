@@ -23,6 +23,7 @@ from frigate.const import (
     CLIPS_DIR,
     EXPORT_DIR,
     MAX_PLAYLIST_SECONDS,
+    MAX_SEGMENT_DURATION,
     PREVIEW_FRAME_TYPE,
 )
 from frigate.ffmpeg_presets import (
@@ -305,6 +306,13 @@ class RecordingExporter(threading.Thread):
                         )
                     )
                     .where(Recordings.camera == self.camera)
+                    # segments are shorter than MAX_SEGMENT_DURATION, so this keeps the same
+                    # rows while letting the start_time index skip all older recordings
+                    .where(
+                        Recordings.start_time.between(
+                            self.start_time - MAX_SEGMENT_DURATION, self.end_time
+                        )
+                    )
                     .iterator()
                 )
             else:
@@ -706,6 +714,13 @@ class RecordingExporter(threading.Thread):
                 )
             )
             .where(Recordings.camera == self.camera)
+            # segments are shorter than MAX_SEGMENT_DURATION, so this keeps the same
+            # rows while letting the start_time index skip all older recordings
+            .where(
+                Recordings.start_time.between(
+                    self.start_time - MAX_SEGMENT_DURATION, self.end_time
+                )
+            )
             .order_by(Recordings.start_time.asc())
             .iterator()
         )
